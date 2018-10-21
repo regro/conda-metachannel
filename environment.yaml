@@ -1,0 +1,18 @@
+name: conda-metachannel
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - blas=*=openblas
+  - networkx >=2
+  - pandas >=0.23
+  - python >=3.7
+  - requests
+  - click
+  - flask
+  - jinja2
+  - sortedcontainers
+  - pip
+  - pip:
+    - quart
+
