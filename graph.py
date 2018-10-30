@@ -1,10 +1,13 @@
 import bz2
 from collections import deque
 import typing
+import operator
 
 import networkx
 import requests
 from pandas.io import json
+
+from cachetools import LRUCache, cachedmethod, TTLCache
 
 
 def build_repodata_graph(repodata):
@@ -40,7 +43,7 @@ def recursive_parents(G: networkx.DiGraph, nodes):
 
 
 class RawRepoData:
-    _cache = {}
+    _cache = TTLCache(maxsize=100, ttl=600)
 
     def __init__(self, channel, arch='linux-64'):
         data = requests.get(f'https://conda.anaconda.org/{channel}/{arch}/repodata.json.bz2')
@@ -62,6 +65,7 @@ class ArtifactGraph:
     def __init__(self, channel, arch, constraints):
         self.raw = get_repo_data(channel, arch)
         self.constrain_graph(self.raw.graph, constraints)
+        self.cache = TTLCache(10, ttl=60)
 
     def constrain_graph(self, graph, constraints):
         if constraints:
@@ -77,10 +81,12 @@ class ArtifactGraph:
             packages.update(self.constrained_graph.nodes[n].get('packages', {}))
         return {'packages': packages}
 
+    @cachedmethod(operator.attrgetter('cache'))
     def repodata_json(self):
         out_string = json.dumps(self.repodata_json_dict())
         return out_string
 
+    @cachedmethod(operator.attrgetter('cache'))
     def repodata_json_bzip(self):
         import bz2
         out_bytes = bz2.compress(self.repodata_json().encode('utf8'), compresslevel=1)
