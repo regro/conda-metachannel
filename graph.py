@@ -111,28 +111,51 @@ class ArtifactGraph:
 
             if '--max-build-no' in self.functional_constraints:
                 # packages with build strings should always be included
-                keep_packages = []
-                packages_by_version = defaultdict(lambda: SortedList(key=lambda o: -o[1].get('build_number', 0)))
-                for k, v in packages.items():
-                    build_string: str = v.get('build', '')
-                    build_string, _, build_number = build_string.rpartition('_')
-
-
-                    if not build_number.isnumeric():
-                        keep_packages.append((k, v))
-                    else:
-                        packages_by_version[(v['version'], build_number)].add((k, v))
-
-
-                for version, ordered_builds in packages_by_version.items():
-                    keep_packages.append(ordered_builds[0])
-
-                packages = dict(keep_packages)
+                packages = self.constrain_by_build_number(packages)
 
             all_packages.update(packages)
             # print(list(all_packages.keys()))
 
         return {'packages': all_packages}
+
+    def constrain_by_build_number(self, packages):
+        """For a given packages dictionary ensure that only the top build number for a given build_string is kept
+
+        Packages without a build number (such as the blas mutex package are unaffected)
+
+            k: artifact_name, v: package information dictionary
+
+        For example
+
+        0.23.0-py27_0, 0.23.0-py27_1, 0.23.0-py36_0
+        ->
+        0.23.0-py27_1, 0.23.0-py36_0
+
+        """
+        keep_packages = []
+        packages_by_version = defaultdict(lambda: SortedList(key=lambda o: -o[1].get('build_number', 0)))
+        for k, v in packages.items():
+            build_string: str = v.get('build', '')
+            build_string, _, build_number = build_string.rpartition('_')
+
+            if not build_number.isnumeric():
+                keep_packages.append((k, v))
+            else:
+                packages_by_version[(v['version'], build_number)].add((k, v))
+
+        for version, ordered_builds in sorted(packages_by_version.items()):
+            print(version, len(ordered_builds))
+        for version, ordered_builds in packages_by_version.items():
+            keep_packages.append(ordered_builds[0])
+        packages = dict(keep_packages)
+        return packages
+
+    def untrack_features(self, packages):
+        """TODO: This function edits the package information dictionary so that packages that are tracked are
+        instead replaced by the appropriate dependencies.
+
+        """
+        return packages
 
     @cachedmethod(operator.attrgetter('cache'))
     def repodata_json(self):
