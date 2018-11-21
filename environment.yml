@@ -7,12 +7,14 @@ dependencies:
   - networkx >=2
   - pandas >=0.23
   - python >=3.7
+  - cachetools
   - requests
   - click
   - flask
   - jinja2
   - sortedcontainers
   - pip
+  - pytest
   - pip:
     - quart
 
