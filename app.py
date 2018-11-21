@@ -1,9 +1,8 @@
+import asyncio
 import argparse
 
 from quart import Quart as Flask, redirect
 from graph import get_artifact_graph
-
-
 
 app = Flask(__name__)
 arch = ['linux-64', 'noarch', 'osx-64']
@@ -17,14 +16,14 @@ INDEX_STATIC = {
 }
 
 
-async def repodata_json(channel, constraints, arch):
+def repodata_json(channel, constraints, arch):
     print("ARCH")
     constraints = constraints.split(',')
     ag = get_artifact_graph(channel, arch, constraints)
     return ag.repodata_json()
 
 
-async def repodata_json_bz2(channel, constraints, arch):
+def repodata_json_bz2(channel, constraints, arch):
     print("REPODATA")
 
     constraints = constraints.split(',')
@@ -41,10 +40,11 @@ async def artifact(channel, constraints, arch, artifact):
 
     """
     print("ARTIFACT")
+    loop = asyncio.get_event_loop()
     if artifact == 'repodata.json':
-        return await repodata_json(channel, constraints, arch)
+        return await loop.run_in_executor(None, repodata_json, channel, constraints, arch)
     elif artifact == 'repodata.json.bz2':
-        return await repodata_json_bz2(channel, constraints, arch)
+        return await loop.run_in_executor(None, repodata_json_bz2, channel, constraints, arch)
     else:
         true_url = f'{CHANNEL_MAP[channel]}/{arch}/{artifact}'
         return redirect(true_url)

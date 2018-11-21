@@ -78,7 +78,6 @@ def parse_constraints(constraints):
     return package_constraints, functional_constraints
 
 
-
 class ArtifactGraph:
 
     _cache = {}
@@ -115,15 +114,15 @@ class ArtifactGraph:
                 keep_packages = []
                 packages_by_version = defaultdict(lambda: SortedList(key=lambda o: -o[1].get('build_number', 0)))
                 for k, v in packages.items():
-                    build_string: str = v.get('build')
-                    if build_string.isnumeric():
-                        packages_by_version[v['version']].add((k, v))
-                    # build hash
-                    elif build_string.startswith('h') and build_string.split('_')[-1].isnumeric():
-                        # TODO: we may want to have all versions for a particular build hash?
-                        packages_by_version[v['version']].add((k, v))
+                    build_string: str = v.get('build', '')
+                    build_string, _, build_number = build_string.rpartition('_')
+
+
+                    if not build_number.isnumeric():
+                        keep_packages.append((k, v))
                     else:
-                        keep_packages.append(k, v)
+                        packages_by_version[(v['version'], build_number)].add((k, v))
+
 
                 for version, ordered_builds in packages_by_version.items():
                     keep_packages.append(ordered_builds[0])
@@ -131,7 +130,7 @@ class ArtifactGraph:
                 packages = dict(keep_packages)
 
             all_packages.update(packages)
-            print(list(all_packages.keys()))
+            # print(list(all_packages.keys()))
 
         return {'packages': all_packages}
 
