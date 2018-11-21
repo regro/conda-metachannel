@@ -1,5 +1,9 @@
+import argparse
+
 from quart import Quart as Flask, redirect
 from graph import get_artifact_graph
+
+
 
 app = Flask(__name__)
 arch = ['linux-64', 'noarch', 'osx-64']
@@ -47,4 +51,10 @@ async def artifact(channel, constraints, arch, artifact):
 
 
 if __name__ == '__main__':
-    app.run()
+    parser = argparse.ArgumentParser("conda-metachannel")
+    parser.add_argument('--host', default='127.0.0.1')
+    parser.add_argument('--port', default=20124, type=int)
+    parser.add_argument('--reload', action='store_true')
+    args = parser.parse_args()
+
+    app.run(host=args.host, port=args.port, use_reloader=args.reload)
