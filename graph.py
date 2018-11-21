@@ -141,7 +141,7 @@ class ArtifactGraph:
             if not build_number.isnumeric():
                 keep_packages.append((k, v))
             else:
-                packages_by_version[(v['version'], build_number)].add((k, v))
+                packages_by_version[(v['version'], build_string)].add((k, v))
 
         for version, ordered_builds in sorted(packages_by_version.items()):
             print(version, len(ordered_builds))
