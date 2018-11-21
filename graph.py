@@ -113,8 +113,13 @@ class ArtifactGraph:
                 # packages with build strings should always be included
                 packages = self.constrain_by_build_number(packages)
 
+            if '--untrack-features' in self.functional_constraints:
+                packages = self.untrack_features(packages)
+
+            if n == 'blas':
+                import pprint
+                pprint.pprint(packages)
             all_packages.update(packages)
-            # print(list(all_packages.keys()))
 
         return {'packages': all_packages}
 
@@ -143,27 +148,54 @@ class ArtifactGraph:
             else:
                 packages_by_version[(v['version'], build_string)].add((k, v))
 
-        for version, ordered_builds in sorted(packages_by_version.items()):
-            print(version, len(ordered_builds))
         for version, ordered_builds in packages_by_version.items():
             keep_packages.append(ordered_builds[0])
+
         packages = dict(keep_packages)
         return packages
 
-    def untrack_features(self, packages):
+    def untrack_features(self, packages: dict) -> dict:
         """TODO: This function edits the package information dictionary so that packages that are tracked are
         instead replaced by the appropriate dependencies.
 
         """
+        feature_map = {
+            'blas_openblas': 'blas * openblas',
+            'blas_mkl': 'blas * mkl',
+            'blas_nomkl': 'blas * nomkl',
+            'vc9': "vs2008_runtime",
+            'vc10': "vs2010_runtime",
+            'vc14': "vs2015_runtime",
+        }
+
+        for k, v in packages.items():
+            features = v.get('features', '').split(' ')
+            kept_features = []
+            for feature in features:
+                if feature in feature_map:
+                    v['depends'].append(feature_map[feature])
+                else:
+                    kept_features.append(feature)
+            kept_features = ' '.join(kept_features)
+            if kept_features:
+                v['features'] = kept_features
+            else:
+                v.pop('features', None)
+
+            # For feature packages get rid of mapped things
+            track_feature = v.get('track_features')
+            if track_feature in feature_map:
+                del v['track_features']
+
         return packages
 
     @cachedmethod(operator.attrgetter('cache'))
-    def repodata_json(self):
+    def repodata_json(self) -> str:
         out_string = json.dumps(self.repodata_json_dict())
         return out_string
 
     @cachedmethod(operator.attrgetter('cache'))
-    def repodata_json_bzip(self):
+    def repodata_json_bzip(self) -> bytes:
         import bz2
         out_bytes = bz2.compress(self.repodata_json().encode('utf8'), compresslevel=1)
         return out_bytes
