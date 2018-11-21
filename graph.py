@@ -1,5 +1,6 @@
 import bz2
-from collections import deque
+from collections import deque, defaultdict
+
 import typing
 import operator
 
@@ -7,6 +8,7 @@ import networkx
 import requests
 from pandas.io import json
 
+from sortedcontainers import SortedList
 from cachetools import LRUCache, cachedmethod, TTLCache
 
 
@@ -62,6 +64,21 @@ def get_repo_data(channel, arch):
     return RawRepoData._cache[key]
 
 
+def parse_constraints(constraints):
+    package_constraints = []
+    # functional constrains are used to constrain within packages.
+    #
+    # These can be version constraints. Build number constraints etc
+    functional_constraints = []
+    for c in constraints:
+        if c.startswith('--'):
+            functional_constraints.append(c)
+        else:
+            package_constraints.append(c)
+    return package_constraints, functional_constraints
+
+
+
 class ArtifactGraph:
 
     _cache = {}
@@ -70,7 +87,10 @@ class ArtifactGraph:
         self.raw = get_repo_data(channel, arch)
         self.arch = arch
         self.noarch = get_repo_data(channel, 'noarch')
-        self.constrain_graph(self.raw.graph, self.noarch.graph, constraints)
+
+        self.package_constraints, self.functional_constraints = parse_constraints(constraints)
+
+        self.constrain_graph(self.raw.graph, self.noarch.graph, self.package_constraints)
         self.cache = TTLCache(100, ttl=600)
 
     def constrain_graph(self, graph, noarch_graph, constraints):
@@ -85,10 +105,35 @@ class ArtifactGraph:
             self.constrained_graph = self.raw.graph
 
     def repodata_json_dict(self):
-        packages = {}
+        all_packages = {}
         for n in self.constrained_graph:
-            packages.update(self.constrained_graph.nodes[n].get(f'packages_{self.arch}', {}))
-        return {'packages': packages}
+            print(n)
+            packages = self.constrained_graph.nodes[n].get(f'packages_{self.arch}', {})
+
+            if '--max-build-no' in self.functional_constraints:
+                # packages with build strings should always be included
+                keep_packages = []
+                packages_by_version = defaultdict(lambda: SortedList(key=lambda o: -o[1].get('build_number', 0)))
+                for k, v in packages.items():
+                    build_string: str = v.get('build')
+                    if build_string.isnumeric():
+                        packages_by_version[v['version']].add((k, v))
+                    # build hash
+                    elif build_string.startswith('h') and build_string.split('_')[-1].isnumeric():
+                        # TODO: we may want to have all versions for a particular build hash?
+                        packages_by_version[v['version']].add((k, v))
+                    else:
+                        keep_packages.append(k, v)
+
+                for version, ordered_builds in packages_by_version.items():
+                    keep_packages.append(ordered_builds[0])
+
+                packages = dict(keep_packages)
+
+            all_packages.update(packages)
+            print(list(all_packages.keys()))
+
+        return {'packages': all_packages}
 
     @cachedmethod(operator.attrgetter('cache'))
     def repodata_json(self):
