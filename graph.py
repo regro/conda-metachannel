@@ -12,7 +12,7 @@ from sortedcontainers import SortedList
 from cachetools import LRUCache, cachedmethod, TTLCache
 
 
-def build_repodata_graph(repodata, arch):
+def build_repodata_graph(repodata: dict, arch: str, url_prefix: str) -> networkx.DiGraph:
     G = networkx.DiGraph()
     for p, v in repodata['packages'].items():
         name = v['name']
@@ -22,6 +22,7 @@ def build_repodata_graph(repodata, arch):
 
         G.nodes[name].setdefault(f'packages_{arch}', {})
         G.nodes[name][f'packages_{arch}'][p] = v
+        v['url'] = f'{url_prefix}/{p}'
 
         for dep in v['depends']:
             dep_name, _, _ = dep.partition(' ')
@@ -51,17 +52,55 @@ class RawRepoData:
     _cache = TTLCache(maxsize=100, ttl=600)
 
     def __init__(self, channel, arch='linux-64'):
-        data = requests.get(f'https://conda.anaconda.org/{channel}/{arch}/repodata.json.bz2')
+        url_prefix = f'https://conda.anaconda.org/{channel}/{arch}'
+        repodata_url = f'{url_prefix}/repodata.json.bz2'
+        data = requests.get(repodata_url)
         repodata = json.loads(bz2.decompress(data.content))
+        self.channel = channel
         self.arch = arch
-        self.graph = build_repodata_graph(repodata, arch)
+        self.graph = build_repodata_graph(repodata, arch, url_prefix)
+        print(f"GRAPH BUILD FOR {repodata_url}")
+
+    def __repr__(self):
+        return f'RawRepoData({self.channel}/{self.arch})'
 
 
-def get_repo_data(channel, arch):
-    key = (channel, arch)
-    if key not in RawRepoData._cache:
-        RawRepoData._cache[key] = RawRepoData(channel, arch)
-    return RawRepoData._cache[key]
+class FusedRepoData:
+    """Utility class describing a set of repodatas treated as a single repository.
+
+    Packages in prior repodatas take precendence.
+
+
+
+    """
+
+    def __init__(self, raw_repodata: typing.Sequence[RawRepoData], arch):
+        print(f"FUSING: {raw_repodata}")
+        self.arch = arch
+        # TODO: Maybe cache this?
+        G = raw_repodata[0].graph
+        for i in range(1, len(raw_repodata)):
+            H = raw_repodata[i].graph
+            G = networkx.compose(G, H)
+            # for n in G.nodes:
+            #     if n in H.nodes:
+            #         # Fuse the package sets together.
+            #         packages = H.nodes[n].get(f'packages_{arch}', {})
+            #         G.nodes[n].setdefault(f'packages_{arch}', {})
+            #         G.nodes[n][f'packages_{arch}'].update(packages)
+
+        self.graph = G
+
+
+def get_repo_data(channel: typing.List[str], arch: str):
+    repodatas = []
+    for c in channel:
+        key = (c, arch)
+        # TODO: This should happen in parallel
+        if key not in RawRepoData._cache:
+            RawRepoData._cache[key] = RawRepoData(c, arch)
+        repodatas.append(RawRepoData._cache[key])
+    return FusedRepoData(repodatas, arch)
 
 
 def parse_constraints(constraints):
@@ -83,8 +122,10 @@ class ArtifactGraph:
     _cache = {}
 
     def __init__(self, channel, arch, constraints):
-        self.raw = get_repo_data(channel, arch)
         self.arch = arch
+
+        # TODO: These should run in parallel
+        self.raw = get_repo_data(channel, arch)
         self.noarch = get_repo_data(channel, 'noarch')
 
         self.package_constraints, self.functional_constraints = parse_constraints(constraints)
@@ -201,11 +242,11 @@ class ArtifactGraph:
         return out_bytes
 
 
-def get_artifact_graph(channel, arch, constraints) -> ArtifactGraph:
+def get_artifact_graph(channel: typing.List[str], arch: str, constraints) -> ArtifactGraph:
     if isinstance(constraints, str):
         constraints = [constraints]
 
-    key = (channel, arch, tuple(sorted(constraints)))
+    key = (tuple(channel), arch, tuple(sorted(constraints)))
     if key not in ArtifactGraph._cache:
         ArtifactGraph._cache[key] = ArtifactGraph(channel, arch, constraints)
     return ArtifactGraph._cache[key]
