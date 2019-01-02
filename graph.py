@@ -1,6 +1,7 @@
 import bz2
 from collections import deque, defaultdict
 
+import time
 import typing
 import operator
 
@@ -52,6 +53,7 @@ class RawRepoData:
     _cache = TTLCache(maxsize=100, ttl=600)
 
     def __init__(self, channel, arch='linux-64'):
+        print(f'RETRIEVING: {channel}, {arch}')
         url_prefix = f'https://conda.anaconda.org/{channel}/{arch}'
         repodata_url = f'{url_prefix}/repodata.json.bz2'
         data = requests.get(repodata_url)
@@ -250,3 +252,4 @@ def get_artifact_graph(channel: typing.List[str], arch: str, constraints) -> Art
     if key not in ArtifactGraph._cache:
         ArtifactGraph._cache[key] = ArtifactGraph(channel, arch, constraints)
     return ArtifactGraph._cache[key]
+

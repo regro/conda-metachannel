@@ -1,9 +1,9 @@
 import asyncio
 import argparse
-from urllib.parse import unquote
+import time
 
 from quart import Quart as Flask, redirect
-from graph import get_artifact_graph, ArtifactGraph
+from graph import get_artifact_graph, ArtifactGraph, get_repo_data
 
 app = Flask(__name__)
 arch = ['linux-64', 'noarch', 'osx-64']
@@ -15,6 +15,15 @@ CHANNEL_MAP = {
 INDEX_STATIC = {
 
 }
+
+CACHED_CHANNELS = [
+    ('conda-forge', 'noarch'),
+    ('conda-forge', 'osx-64'),
+    ('conda-forge', 'linux-64'),
+    ('conda-forge', 'win-64'),
+    ('conda-forge/label/gcc7', 'osx-64'),
+    ('conda-forge/label/gcc7', 'linux-64'),
+]
 
 
 def fetch_artifact_graph(channel, constraints, arch) -> ArtifactGraph:
@@ -32,6 +41,12 @@ def repodata_json(channel, constraints, arch):
 def repodata_json_bz2(channel, constraints, arch):
     ag = fetch_artifact_graph(channel, constraints, arch)
     return ag.repodata_json_bzip()
+
+
+async def warm_cache(loop, channel, arch):
+    while True:
+        await loop.run_in_executor(None, get_repo_data, channel, arch)
+        await asyncio.sleep(30)
 
 
 @app.route('/<path:channel>/<constraints>/<arch>/<artifact>')
@@ -64,5 +79,10 @@ if __name__ == '__main__':
     parser.add_argument('--port', default=20124, type=int)
     parser.add_argument('--reload', action='store_true')
     args = parser.parse_args()
+
+    loop = asyncio.get_event_loop()
+    # Start the background worker to run through all the channels
+    for channel, arch in CACHED_CHANNELS:
+        loop.create_task(warm_cache(loop, [channel], arch))
 
     app.run(host=args.host, port=args.port, use_reloader=args.reload)
