@@ -7,7 +7,7 @@ ENV PATH="/opt/env/bin:$PATH"
 
 EXPOSE 20124
 
-RUN mnkdir /work
+RUN mkdir /work
 ADD . /work
 WORKDIR /work
 
