@@ -4,6 +4,7 @@ ADD environment.yml .
 RUN conda env create -p /opt/env --file environment.yml
 
 ENV PATH="/opt/env/bin:$PATH"
+ENV PYTHONUNBUFFERED="1"
 
 EXPOSE 20124
 
