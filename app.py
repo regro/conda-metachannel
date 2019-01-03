@@ -116,9 +116,12 @@ if __name__ == '__main__':
     parser.add_argument('--reload', action='store_true')
     args = parser.parse_args()
 
-    if in_container() and args.host == '127.0.0.1':
-        logger.warning("Detected that we are running inside docker.  Overriding host")
-        args.host = '0.0.0.0'
+    try:
+        if in_container() and args.host == '127.0.0.1':
+            logger.warning("Detected that we are running inside docker.  Overriding host")
+            args.host = '0.0.0.0'
+    except:
+        pass
 
     loop = asyncio.get_event_loop()
     # Start the background worker to run through all the channels
