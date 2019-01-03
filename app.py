@@ -90,6 +90,14 @@ def version():
     return json.dumps({"version": VERSION})
 
 
+@app.route('/')
+def root():
+    if os.path.exists('README.md'):
+        return open('README.md').read()
+    else:
+        return 'Welcome top conda-metachannel.  See https://github.com/regro/conda-metachannel for details'
+
+
 def in_container():
     # type: () -> bool
     """ Determines if we're running in an lxc/docker container.
