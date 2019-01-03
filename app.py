@@ -8,7 +8,7 @@ from graph import get_artifact_graph, ArtifactGraph, get_repo_data
 app = Flask(__name__)
 arch = ['linux-64', 'noarch', 'osx-64']
 
-
+VERSION = "0.0.0"
 CHANNEL_MAP = {
     'conda-forge': 'https://conda-static.anaconda.org/conda-forge',
 }

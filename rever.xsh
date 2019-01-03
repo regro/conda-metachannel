@@ -3,34 +3,33 @@ import os
 from rever.activity import activity
 
 
-$PROJECT = $GITHUB_REPO = 'libcflib'
+$GITHUB_ORG = 'regro'
+$PROJECT = $GITHUB_REPO = 'conda-metachannel'
 $ACTIVITIES = [
     'version_bump',
     'changelog',
     'tag',
     'push_tag',
     'ghrelease',
-    'pypi',
-    'conda_forge',
+    # uncomment the following lines if we ever install this thing
+    # 'pypi',
+    # 'conda_forge',
     'docker_build',
     'docker_push',
     'deploy_to_gcloud',
 ]
 
 $VERSION_BUMP_PATTERNS = [
-    ($PROJECT+'/__init__.py', '__version__\s*=.*', "__version__ = '$VERSION'"),
-    ('setup.py', 'VERSION\s*=.*', "VERSION = '$VERSION'")
+    ('app.py', 'VERSION\s*=.*', 'VERSION = "$VERSION"'),
     ]
 $CHANGELOG_FILENAME = 'CHANGELOG.rst'
 $CHANGELOG_TEMPLATE = 'TEMPLATE.rst'
-$PUSH_TAG_REMOTE = 'git@github.com:regro/libcflib.git'
-
-$GITHUB_ORG = 'regro'
+$PUSH_TAG_REMOTE = 'git@github.com:regro/conda-metachannel.git'
 
 # docker config
 $DOCKERFILE = 'docker/Dockerfile'
-$DOCKERFILE_TAGS = ('condaforge/libcflib:$VERSION',
-                    'condaforge/libcflib:latest')
+$DOCKERFILE_TAGS = ('condaforge/conda-metachannel:$VERSION',
+                    'condaforge/conda-metachannel:latest')
 
 #
 # Google Cloud
