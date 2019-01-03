@@ -1,7 +1,7 @@
 import bz2
 from collections import deque, defaultdict
+from logging import getLogger
 
-import time
 import typing
 import operator
 
@@ -11,6 +11,9 @@ from pandas.io import json
 
 from sortedcontainers import SortedList
 from cachetools import LRUCache, cachedmethod, TTLCache
+
+
+logger = getLogger(__name__)
 
 
 def build_repodata_graph(repodata: dict, arch: str, url_prefix: str) -> networkx.DiGraph:
@@ -53,7 +56,7 @@ class RawRepoData:
     _cache = TTLCache(maxsize=100, ttl=600)
 
     def __init__(self, channel, arch='linux-64'):
-        print(f'RETRIEVING: {channel}, {arch}')
+        logger.info(f'RETRIEVING: {channel}, {arch}')
         url_prefix = f'https://conda.anaconda.org/{channel}/{arch}'
         repodata_url = f'{url_prefix}/repodata.json.bz2'
         data = requests.get(repodata_url)
@@ -61,7 +64,7 @@ class RawRepoData:
         self.channel = channel
         self.arch = arch
         self.graph = build_repodata_graph(repodata, arch, url_prefix)
-        print(f"GRAPH BUILD FOR {repodata_url}")
+        logger.info(f"GRAPH BUILD FOR {repodata_url}")
 
     def __repr__(self):
         return f'RawRepoData({self.channel}/{self.arch})'
@@ -77,7 +80,7 @@ class FusedRepoData:
     """
 
     def __init__(self, raw_repodata: typing.Sequence[RawRepoData], arch):
-        print(f"FUSING: {raw_repodata}")
+        logger.debug(f"FUSING: {raw_repodata}")
         self.arch = arch
         # TODO: Maybe cache this?
         G = raw_repodata[0].graph
@@ -149,7 +152,7 @@ class ArtifactGraph:
     def repodata_json_dict(self):
         all_packages = {}
         for n in self.constrained_graph:
-            print(n)
+            logger.debug(n)
             packages = self.constrained_graph.nodes[n].get(f'packages_{self.arch}', {})
 
             if '--max-build-no' in self.functional_constraints:
@@ -161,7 +164,7 @@ class ArtifactGraph:
 
             if n == 'blas':
                 import pprint
-                pprint.pprint(packages)
+                logger.debug(pprint.pformat(packages))
             all_packages.update(packages)
 
         return {'packages': all_packages}

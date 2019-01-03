@@ -1,11 +1,15 @@
 import asyncio
 import argparse
-import time
+import os
+import subprocess
+import logging
 
 from quart import Quart as Flask, redirect
 from pandas.io import json
 from graph import get_artifact_graph, ArtifactGraph, get_repo_data
 
+
+logger = logging.getLogger(__name__)
 app = Flask(__name__)
 arch = ['linux-64', 'noarch', 'osx-64']
 
@@ -86,12 +90,35 @@ def version():
     return json.dumps({"version": VERSION})
 
 
+def in_container():
+    # type: () -> bool
+    """ Determines if we're running in an lxc/docker container.
+
+    Shamelessly acquired from https://stackoverflow.com/a/46436970
+    """
+    out = subprocess.check_output('cat /proc/1/sched', shell=True)
+    out = out.decode('utf-8').lower()
+    checks = [
+        'docker' in out,
+        '/lxc/' in out,
+        out.split()[0] not in ('systemd', 'init',),
+        os.path.exists('/.dockerenv'),
+        os.path.exists('/.dockerinit'),
+        os.getenv('container', None) is not None
+    ]
+    return any(checks)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser("conda-metachannel")
     parser.add_argument('--host', default='127.0.0.1')
     parser.add_argument('--port', default=20124, type=int)
     parser.add_argument('--reload', action='store_true')
     args = parser.parse_args()
+
+    if in_container() and args.host == '127.0.0.1':
+        logger.warning("Detected that we are running inside docker.  Overriding host")
+        args.host = '0.0.0.0'
 
     loop = asyncio.get_event_loop()
     # Start the background worker to run through all the channels
