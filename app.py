@@ -98,4 +98,4 @@ if __name__ == '__main__':
     for channel, arch in CACHED_CHANNELS:
         loop.create_task(warm_cache(loop, [channel], arch))
 
-    app.run(host=args.host, port=args.port, use_reloader=args.reload)
+    app.run(host=args.host, port=args.port, use_reloader=args.reload, loop=loop)

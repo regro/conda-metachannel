@@ -12,4 +12,4 @@ RUN mkdir /work
 ADD . /work
 WORKDIR /work
 
-ENTRYPOINT ["python", "app.py"]
+ENTRYPOINT ["python", "app.py", "--host", "0.0.0.0", "--port", "20214"]
