@@ -16,7 +16,7 @@ $ACTIVITIES = [
     # 'conda_forge',
     'docker_build',
     'docker_push',
-#    'deploy_to_gcloud',
+    'deploy_to_gcloud',
 ]
 
 $VERSION_BUMP_PATTERNS = [

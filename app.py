@@ -3,6 +3,7 @@ import argparse
 import time
 
 from quart import Quart as Flask, redirect
+from pandas.io import json
 from graph import get_artifact_graph, ArtifactGraph, get_repo_data
 
 app = Flask(__name__)
@@ -71,6 +72,18 @@ async def artifact(channel, constraints, arch, artifact):
         true_url = ag.repodata_json_dict()['packages'][artifact]['url']
         # true_url = f'{CHANNEL_MAP[channel]}/{arch}/{artifact}'
         return redirect(true_url)
+
+
+@app.route('/version')
+def version():
+    """Returns version information
+
+    Example:
+
+        /version
+
+    """
+    return json.dumps({"version": VERSION})
 
 
 if __name__ == '__main__':
