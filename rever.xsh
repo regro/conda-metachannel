@@ -27,7 +27,7 @@ $CHANGELOG_TEMPLATE = 'TEMPLATE.rst'
 $PUSH_TAG_REMOTE = 'git@github.com:regro/conda-metachannel.git'
 
 # docker config
-$DOCKERFILE = 'docker/Dockerfile'
+$DOCKERFILE = 'Dockerfile'
 $DOCKERFILE_TAGS = ('condaforge/conda-metachannel:$VERSION',
                     'condaforge/conda-metachannel:latest')
 
