@@ -8,7 +8,8 @@ $GITHUB_ORG = 'regro'
 $PROJECT = $GITHUB_REPO = 'conda-metachannel'
 $ACTIVITIES = [
     'version_bump',
-    'changelog',
+    # uncomment if we start keeping a changelog
+    # 'changelog',
     'tag',
     'push_tag',
     'ghrelease',
