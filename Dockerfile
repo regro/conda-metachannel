@@ -1,7 +1,7 @@
 FROM continuumio/miniconda
 
 ADD environment.yml .
-RUN conda env create --copy -p /opt/env
+RUN conda create --copy -p /opt/env
 
 ENV PATH="/opt/env/bin:$PATH"
 
