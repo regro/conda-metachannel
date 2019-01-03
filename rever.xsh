@@ -36,7 +36,7 @@ $DOCKERFILE_TAGS = ('condaforge/conda-metachannel:$VERSION',
 #
 $GCLOUD_PROJECT_ID = 'conda-metachannel'
 $GCLOUD_ZONE = 'us-central1-a'
-$GCLOUD_CLUSTER = 'conda-metachannel-cluster00'
+$GCLOUD_CLUSTER = 'conda-metachannel-cluster01'
 
 
 def _ensure_default_credentials():
