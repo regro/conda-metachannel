@@ -25,7 +25,7 @@ eg
 
 ```bash
 $ conda search --override-channels \
-      -c http://<HOST>/conda-forge/python,--max-build-no 'python=3.6.1'
+      -c http://<HOST>/conda-forge/python, 'python=3.6.1'
 
 python                    3.6.1               0  conda-forge/python
 python                    3.6.1               1  conda-forge/python
