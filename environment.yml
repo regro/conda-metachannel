@@ -13,6 +13,7 @@ dependencies:
   - flask
   - jinja2
   - sortedcontainers
+  - hypercorn
   - pip
   - pytest
   - pip:
