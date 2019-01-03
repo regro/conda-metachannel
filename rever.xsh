@@ -72,7 +72,7 @@ def deploy_to_gcloud():
     ![gcloud container clusters get-credentials --account @(account) \
       --zone=$GCLOUD_ZONE --project=$GCLOUD_PROJECT_ID $GCLOUD_CLUSTER]
     # set new image
-    ![kubectl set image deployment/conda-metachannel-app conda-metachannel-app=condaforge/conda-metachannel:$VERSION]
+    ![kubectl set image deployment/conda-metachannel-app conda-metachannel-app=docker.io/condaforge/conda-metachannel:$VERSION]
 
 
 # Ensure that we have the proper software to perform release
