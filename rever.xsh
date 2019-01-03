@@ -16,7 +16,7 @@ $ACTIVITIES = [
     # 'conda_forge',
     'docker_build',
     'docker_push',
-    'deploy_to_gcloud',
+#    'deploy_to_gcloud',
 ]
 
 $VERSION_BUMP_PATTERNS = [
@@ -34,9 +34,9 @@ $DOCKERFILE_TAGS = ('condaforge/conda-metachannel:$VERSION',
 #
 # Google Cloud
 #
-$GCLOUD_PROJECT_ID = 'libcflib'
+$GCLOUD_PROJECT_ID = 'conda-metachannel'
 $GCLOUD_ZONE = 'us-central1-a'
-$GCLOUD_CLUSTER = 'libcflib-cluster00'
+$GCLOUD_CLUSTER = 'conda-metachannel-cluster00'
 
 
 def _ensure_default_credentials():
@@ -72,7 +72,7 @@ def deploy_to_gcloud():
     ![gcloud container clusters get-credentials --account @(account) \
       --zone=$GCLOUD_ZONE --project=$GCLOUD_PROJECT_ID $GCLOUD_CLUSTER]
     # set new image
-    ![kubectl set image deployment/libcflib-app libcflib-app=condaforge/libcflib:$VERSION]
+    ![kubectl set image deployment/conda-metachannel-app conda-metachannel-app=condaforge/conda-metachannel:$VERSION]
 
 
 # Ensure that we have the proper software to perform release
