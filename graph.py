@@ -131,7 +131,16 @@ class ArtifactGraph:
 
         # TODO: These should run in parallel
         self.raw = get_repo_data(channel, arch)
-        self.noarch = get_repo_data(channel, 'noarch')
+
+        # TODO: Since solving the artifact graph happens twice for a given conda operation, once for arch and once for
+        #       noarch we need to treat the noarch channel here as an arch channel.
+        #       The choice of noarch standin as linux-64 is mostly convenience.
+        #       In the future it may be wiser to just store the whole are collectively.
+
+        if arch != 'noarch':
+            self.noarch = get_repo_data(channel, 'noarch')
+        else:
+            self.noarch = get_repo_data(channel, 'linux-64')
 
         self.package_constraints, self.functional_constraints = parse_constraints(constraints)
 
