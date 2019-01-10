@@ -45,6 +45,12 @@ def recursive_parents(G: networkx.DiGraph, nodes):
         n = todo.popleft()
         if n in done:
             continue
+        # If we requested a package that does not exist in our graph, skip it
+        if n not in G.nodes:
+            # TODO: switch logging to loguru so that we can have context
+            logger.warning(f"Package {n} not found in graph!")
+            done.add(n)
+            continue
         # TODO: this seems to cause issues with root nodes like zlib
         children = list(G.predecessors(n))
         todo.extend(children)

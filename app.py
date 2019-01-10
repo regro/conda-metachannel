@@ -62,9 +62,8 @@ async def artifact(channel, constraints, arch, artifact):
           /conda-forge/pandas,ipython,scikitlearn/linux-64/artifact.
 
     """
-    print("ARTIFACT")
-    print(locals())
     loop = asyncio.get_event_loop()
+    logger.info(locals())
     if artifact == 'repodata.json':
         return await loop.run_in_executor(None, repodata_json, channel, constraints, arch)
     elif artifact == 'repodata.json.bz2':
