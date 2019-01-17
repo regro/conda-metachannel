@@ -26,8 +26,6 @@ CACHED_CHANNELS = [
     ('conda-forge', 'osx-64'),
     ('conda-forge', 'linux-64'),
     ('conda-forge', 'win-64'),
-    ('conda-forge/label/gcc7', 'osx-64'),
-    ('conda-forge/label/gcc7', 'linux-64'),
 ]
 
 
