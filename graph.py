@@ -6,7 +6,10 @@ import os
 import pathlib
 import typing
 import operator
-import ruamel_yaml
+try:
+    import ruamel.yaml as ruamel_yaml
+except ImportError:
+    import ruamel_yaml
 
 import networkx
 import requests
