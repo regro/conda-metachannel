@@ -254,7 +254,11 @@ class ArtifactGraph:
                 get_blacklist(blacklist_name, channel, self.arch)
             )
         if len(effective_blacklist):
-            return {k: v for k, v in packages.items() if k not in effective_blacklist}
+            o = {k: v for k, v in packages.items() if k not in effective_blacklist}
+            logger.debug("constrained channel from {} to {} artifacts".format(
+                len(packages), len(o)
+            ))
+            return o
         else:
             return packages
 
@@ -311,7 +315,6 @@ def get_artifact_graph(
 ) -> ArtifactGraph:
     if isinstance(constraints, str):
         constraints = [constraints]
-    print(constraints)
 
     key = (tuple(channel), arch, tuple(sorted(constraints)))
     if key not in ArtifactGraph._cache:
