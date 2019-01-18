@@ -16,6 +16,7 @@ dependencies:
   - hypercorn
   - pip
   - pytest
+  - ruamel.yaml
   - pip:
     - quart
 
