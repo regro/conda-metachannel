@@ -1,5 +1,7 @@
 # conda-metachannel
 
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
+
 This is a small little web application to behave like a conda channel but 
 with constraints.  
 
@@ -60,4 +62,14 @@ pandas    0.23.4 py27h1702cab_1000  conda-forge,conda-forge%2Flabel%2Fgcc7/--max
 pandas    0.23.4 py36h1702cab_1000  conda-forge,conda-forge%2Flabel%2Fgcc7/--max-build-no
 pandas    0.23.4 py37h1702cab_1000  conda-forge,conda-forge%2Flabel%2Fgcc7/--max-build-no
 ```
+
+### blacklists
+
+conda-metachannel has the ability to apply package blacklists.  These need to be present as 
+``blacklists/<channel>/<name>.yml`` 
+
+$ conda search --override-channels -c http://35.232.222.82/conda-forge/--blacklist=abi python
+
+The default blacklist that ships with conda-metachannel is one that removes all potential abi
+incompatible packages resulting from the compiler switchover from conda-forge.
 
