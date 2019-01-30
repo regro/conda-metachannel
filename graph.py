@@ -1,7 +1,7 @@
 import bz2
 from collections import deque, defaultdict
 from logging import getLogger
-
+import time
 import os
 import pathlib
 import typing
@@ -156,7 +156,7 @@ class ArtifactGraph:
 
     _cache = {}
 
-    def __init__(self, channel, arch, constraints):
+    def __init__(self, channel, arch, constraints, ttl=600):
         self.arch = arch
 
         # TODO: These should run in parallel
@@ -179,7 +179,19 @@ class ArtifactGraph:
         self.constrain_graph(
             self.raw.graph, self.noarch.graph, self.package_constraints
         )
-        self.cache = TTLCache(100, ttl=600)
+        self.ttl = ttl
+        self._cache = TTLCache(100, ttl=ttl)
+        self._last_expiry = time.monotonic()
+
+    @property
+    def cache(self):
+        # when getting the cache, be sure to clear it, if needed.
+        current = time.monotonic()
+        if current - self._last_expiry >= self.ttl:
+            self._cache.expire()
+            self._last_expiry = current
+        return self._cache
+
 
     def constrain_graph(self, graph, noarch_graph, constraints):
         # Since noarch is solved along with our normal channel we need to combine the two for our effective
