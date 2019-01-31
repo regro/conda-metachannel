@@ -67,9 +67,15 @@ def recursive_parents(G: networkx.DiGraph, nodes):
 
 
 class RawRepoData:
-    _cache = TTLCache(maxsize=100, ttl=600)
+    _ttlcache = None
 
-    def __init__(self, channel: str, arch: str = "linux-64"):
+    def __init__(self, channel: str, arch: str = "linux-64", ttl: int = 600):
+        # setup cache
+        self.ttl = ttl
+        if self._ttlcache is None:
+            self.__class__._ttlcache = TTLCache(100, ttl=ttl)
+        self._last_expiry = time.monotonic()
+        # normal seetings
         logger.info(f"RETRIEVING: {channel}, {arch}")
         url_prefix = f"https://conda.anaconda.org/{channel}/{arch}"
         repodata_url = f"{url_prefix}/repodata.json.bz2"
@@ -82,6 +88,16 @@ class RawRepoData:
 
     def __repr__(self):
         return f"RawRepoData({self.channel}/{self.arch})"
+
+    @property
+    def _cache(self):
+        # when getting the cache, be sure to clear it, if needed.
+        current = time.monotonic()
+        if current - self._last_expiry >= self.ttl:
+            self._ttlcache.expire()
+            self._last_expiry = current
+        return self._ttlcache
+
 
 
 class FusedRepoData:
@@ -155,6 +171,7 @@ def get_blacklist(blacklist_name, channel, arch):
 class ArtifactGraph:
 
     _cache = {}
+    _ttlcache = None
 
     def __init__(self, channel, arch, constraints, ttl=600):
         self.arch = arch
@@ -180,7 +197,8 @@ class ArtifactGraph:
             self.raw.graph, self.noarch.graph, self.package_constraints
         )
         self.ttl = ttl
-        self._cache = TTLCache(100, ttl=ttl)
+        if self._ttlcache is None:
+            self.__class__._ttlcache = TTLCache(100, ttl=ttl)
         self._last_expiry = time.monotonic()
 
     @property
@@ -188,10 +206,9 @@ class ArtifactGraph:
         # when getting the cache, be sure to clear it, if needed.
         current = time.monotonic()
         if current - self._last_expiry >= self.ttl:
-            self._cache.expire()
+            self._ttlcache.expire()
             self._last_expiry = current
-        return self._cache
-
+        return self._ttlcache
 
     def constrain_graph(self, graph, noarch_graph, constraints):
         # Since noarch is solved along with our normal channel we need to combine the two for our effective
