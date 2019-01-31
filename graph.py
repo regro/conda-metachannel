@@ -68,13 +68,13 @@ def recursive_parents(G: networkx.DiGraph, nodes):
 
 class RawRepoData:
     _ttlcache = None
+    _last_expiry = time.monotonic()
 
     def __init__(self, channel: str, arch: str = "linux-64", ttl: int = 600):
         # setup cache
         self.ttl = ttl
         if self._ttlcache is None:
             self.__class__._ttlcache = TTLCache(100, ttl=ttl)
-        self._last_expiry = time.monotonic()
         # normal seetings
         logger.info(f"RETRIEVING: {channel}, {arch}")
         url_prefix = f"https://conda.anaconda.org/{channel}/{arch}"
@@ -95,7 +95,7 @@ class RawRepoData:
         current = time.monotonic()
         if current - self._last_expiry >= self.ttl:
             self._ttlcache.expire()
-            self._last_expiry = current
+            self.__class__._last_expiry = current
         return self._ttlcache
 
 
@@ -172,6 +172,7 @@ class ArtifactGraph:
 
     _cache = {}
     _ttlcache = None
+    _last_expiry = time.monotonic()
 
     def __init__(self, channel, arch, constraints, ttl=600):
         self.arch = arch
@@ -199,7 +200,6 @@ class ArtifactGraph:
         self.ttl = ttl
         if self._ttlcache is None:
             self.__class__._ttlcache = TTLCache(100, ttl=ttl)
-        self._last_expiry = time.monotonic()
 
     @property
     def cache(self):
@@ -207,7 +207,7 @@ class ArtifactGraph:
         current = time.monotonic()
         if current - self._last_expiry >= self.ttl:
             self._ttlcache.expire()
-            self._last_expiry = current
+            self.__class__._last_expiry = current
         return self._ttlcache
 
     def constrain_graph(self, graph, noarch_graph, constraints):
