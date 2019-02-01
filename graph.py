@@ -67,14 +67,13 @@ def recursive_parents(G: networkx.DiGraph, nodes):
 
 
 class RawRepoData:
-    _ttlcache = None
+    _ttl = 600
+    _cache = TTLCache(100, ttl=_ttl)
     _last_expiry = time.monotonic()
 
-    def __init__(self, channel: str, arch: str = "linux-64", ttl: int = 600):
+    def __init__(self, channel: str, arch: str = "linux-64"):
         # setup cache
         self.ttl = ttl
-        if self._ttlcache is None:
-            self.__class__._ttlcache = TTLCache(100, ttl=ttl)
         # normal seetings
         logger.info(f"RETRIEVING: {channel}, {arch}")
         url_prefix = f"https://conda.anaconda.org/{channel}/{arch}"
@@ -89,15 +88,13 @@ class RawRepoData:
     def __repr__(self):
         return f"RawRepoData({self.channel}/{self.arch})"
 
-    @property
-    def _cache(self):
+    @classmethod
+    def _expire(cls):
         # when getting the cache, be sure to clear it, if needed.
         current = time.monotonic()
-        if current - self._last_expiry >= self.ttl:
-            self._ttlcache.expire()
-            self.__class__._last_expiry = current
-        return self._ttlcache
-
+        if current - cls._last_expiry >= cls._ttl:
+            cls._cache.expire()
+            cls._last_expiry = current
 
 
 class FusedRepoData:
@@ -133,6 +130,7 @@ class FusedRepoData:
 
 def get_repo_data(channel: typing.List[str], arch: str) -> FusedRepoData:
     repodatas = []
+    RawRepoData._expire()
     for c in channel:
         key = (c, arch)
         # TODO: This should happen in parallel
