@@ -71,7 +71,7 @@ class RawRepoData:
     _cache = TTLCache(100, ttl=_ttl)
     _last_expiry = time.monotonic()
 
-    def __init__(self, channel: str, arch: str = "linux-64"):
+    def __init__(self, channel: str, arch: str = "linux-64", ttl=600):
         # setup cache
         self.ttl = ttl
         # normal seetings
