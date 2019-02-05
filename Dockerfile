@@ -1,7 +1,8 @@
 FROM continuumio/miniconda
 
 ADD environment.yml .
-RUN conda env create -p /opt/env --file environment.yml
+RUN conda env create -p /opt/env --file environment.yml && \
+    conda clean --all
 
 ENV PATH="/opt/env/bin:$PATH"
 ENV PYTHONUNBUFFERED="1"

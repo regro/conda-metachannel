@@ -6,6 +6,8 @@ import os
 import pathlib
 import typing
 import operator
+from pprint import pformat
+
 try:
     import ruamel.yaml as ruamel_yaml
 except ImportError:
@@ -41,6 +43,22 @@ def build_repodata_graph(
             G.add_edge(dep_name, name)
 
     return G
+
+
+def compose_with_attrs(G: networkx.DiGraph, H: networkx.DiGraph) -> networkx.DiGraph:
+    """Composes the two graphs together in such a way as to retain / merge attributes"""
+    I = networkx.compose(G, H)
+    for name, attrs in G.nodes(data=True):
+        for key, val in attrs.items():
+            if not key.startswith("packages_"):
+                continue
+            arch = key[9:]
+            I.nodes[name].setdefault("arch", set())
+            I.nodes[name]["arch"].add(arch)
+
+            I.nodes[name].setdefault(key, {})
+            I.nodes[name][key].update(val)
+    return I
 
 
 def recursive_parents(G: networkx.DiGraph, nodes):
@@ -114,13 +132,7 @@ class FusedRepoData:
             raw = raw_repodata[i]
             self.component_channels.append(raw.channel)
             H = raw.graph
-            G = networkx.compose(G, H)
-            # for n in G.nodes:
-            #     if n in H.nodes:
-            #         # Fuse the package sets together.
-            #         packages = H.nodes[n].get(f'packages_{arch}', {})
-            #         G.nodes[n].setdefault(f'packages_{arch}', {})
-            #         G.nodes[n][f'packages_{arch}'].update(packages)
+            G = compose_with_attrs(G, H)
 
         self.graph = G
 
@@ -168,12 +180,14 @@ def get_blacklist(blacklist_name, channel, arch):
 
 class ArtifactGraph:
 
-    _cache = {}
-    _ttlcache = None
+    _ttl = 600
+    _artifact_graph_cache = TTLCache(100, ttl=_ttl)
     _last_expiry = time.monotonic()
 
-    def __init__(self, channel, arch, constraints, ttl=600):
+    def __init__(self, channel, arch, constraints):
+        self.channel = channel
         self.arch = arch
+        self.constraints = constraints
 
         # TODO: These should run in parallel
         self.raw = get_repo_data(channel, arch)
@@ -195,29 +209,31 @@ class ArtifactGraph:
         self.constrain_graph(
             self.raw.graph, self.noarch.graph, self.package_constraints
         )
-        self.ttl = ttl
-        if self._ttlcache is None:
-            self.__class__._ttlcache = TTLCache(100, ttl=ttl)
 
-    @property
-    def cache(self):
+        self._repodata_cache = TTLCache(100, ttl=self._ttl)
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}({self.channel!r}, {self.arch!r}, {self.constraints!r})"
+
+    @classmethod
+    def artifact_graph_cache(cls):
         # when getting the cache, be sure to clear it, if needed.
         current = time.monotonic()
-        if current - self._last_expiry >= self.ttl:
-            self._ttlcache.expire()
-            self.__class__._last_expiry = current
-        return self._ttlcache
+        if current - cls._last_expiry >= cls._ttl:
+            cls._artifact_graph_cache.expire()
+            cls._last_expiry = current
+        return cls._artifact_graph_cache
 
     def constrain_graph(self, graph, noarch_graph, constraints):
         # Since noarch is solved along with our normal channel we need to combine the two for our effective
         # graph.
-        combined_graph = networkx.compose(graph, noarch_graph)
+        combined_graph = compose_with_attrs(graph, noarch_graph)
         if constraints:
             nodes = recursive_parents(combined_graph, constraints)
-            subset = self.raw.graph.subgraph(nodes)
+            subset = combined_graph.subgraph(nodes)
             self.constrained_graph = subset
         else:
-            self.constrained_graph = self.raw.graph
+            self.constrained_graph = combined_graph
 
     def repodata_json_dict(self):
         all_packages = {}
@@ -237,9 +253,7 @@ class ArtifactGraph:
                     packages = self.constrain_by_blacklist(packages, blacklist_name)
 
             if n == "blas":
-                import pprint
-
-                logger.debug(pprint.pformat(packages))
+                logger.debug(pformat(packages))
             all_packages.update(packages)
 
         return {"packages": all_packages}
@@ -285,9 +299,11 @@ class ArtifactGraph:
             )
         if len(effective_blacklist):
             o = {k: v for k, v in packages.items() if k not in effective_blacklist}
-            logger.debug("constrained channel from {} to {} artifacts".format(
-                len(packages), len(o)
-            ))
+            logger.debug(
+                "constrained channel from {} to {} artifacts".format(
+                    len(packages), len(o)
+                )
+            )
             return o
         else:
             return packages
@@ -327,12 +343,12 @@ class ArtifactGraph:
 
         return packages
 
-    @cachedmethod(operator.attrgetter("cache"))
+    @cachedmethod(operator.attrgetter("_repodata_cache"))
     def repodata_json(self) -> str:
         out_string = json.dumps(self.repodata_json_dict())
         return out_string
 
-    @cachedmethod(operator.attrgetter("cache"))
+    @cachedmethod(operator.attrgetter("_repodata_cache"))
     def repodata_json_bzip(self) -> bytes:
         import bz2
 
@@ -347,6 +363,7 @@ def get_artifact_graph(
         constraints = [constraints]
 
     key = (tuple(channel), arch, tuple(sorted(constraints)))
-    if key not in ArtifactGraph._cache:
-        ArtifactGraph._cache[key] = ArtifactGraph(channel, arch, constraints)
-    return ArtifactGraph._cache[key]
+    agcache = ArtifactGraph.artifact_graph_cache()
+    if key not in agcache:
+        agcache[key] = ArtifactGraph(channel, arch, constraints)
+    return agcache[key]
