@@ -28,7 +28,7 @@ CACHED_CHANNELS = [
 def fetch_artifact_graph(channel, constraints, arch) -> ArtifactGraph:
     constraints = constraints.split(",")
     channel = channel.split(",")
-    ag = get_artifact_graph(URL, channel, arch, constraints)
+    ag = get_artifact_graph(channel, arch, constraints, BASE_URL)
     return ag
 
 
@@ -42,9 +42,9 @@ def repodata_json_bz2(channel, constraints, arch):
     return ag.repodata_json_bzip()
 
 
-async def warm_cache(loop, url, channel, arch):
+async def warm_cache(loop, channel, arch, base_url):
     while True:
-        await loop.run_in_executor(None, get_repo_data, url, channel, arch)
+        await loop.run_in_executor(None, get_repo_data, channel, arch, base_url)
         await asyncio.sleep(30)
 
 
@@ -129,10 +129,10 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", default=20124, type=int)
     parser.add_argument("--reload", action="store_true")
-    parser.add_argument("--url", default="https://conda.anaconda.org/")
+    parser.add_argument("--base-url", default="https://conda.anaconda.org/")
     args = parser.parse_args()
 
-    URL = args.url.rstrip('/')
+    BASE_URL = args.base_url.rstrip('/')
 
     try:
         if in_container() and args.host == "127.0.0.1":
@@ -146,6 +146,6 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     # Start the background worker to run through all the channels
     for channel, arch in CACHED_CHANNELS:
-        loop.create_task(warm_cache(loop, URL, [channel], arch))
+        loop.create_task(warm_cache(loop, [channel], arch, BASE_URL))
 
     app.run(host=args.host, port=args.port, use_reloader=args.reload, loop=loop)
