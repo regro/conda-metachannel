@@ -28,7 +28,7 @@ CACHED_CHANNELS = [
 def fetch_artifact_graph(channel, constraints, arch) -> ArtifactGraph:
     constraints = constraints.split(",")
     channel = channel.split(",")
-    ag = get_artifact_graph(channel, arch, constraints, BASE_URL)
+    ag = get_artifact_graph(channel, arch, constraints, base_url)
     return ag
 
 
@@ -132,7 +132,7 @@ if __name__ == "__main__":
     parser.add_argument("--base-url", default="https://conda.anaconda.org/")
     args = parser.parse_args()
 
-    BASE_URL = args.base_url.rstrip('/')
+    base_url = args.base_url.rstrip('/')
 
     try:
         if in_container() and args.host == "127.0.0.1":
@@ -146,6 +146,6 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     # Start the background worker to run through all the channels
     for channel, arch in CACHED_CHANNELS:
-        loop.create_task(warm_cache(loop, [channel], arch, BASE_URL))
+        loop.create_task(warm_cache(loop, [channel], arch, base_url))
 
     app.run(host=args.host, port=args.port, use_reloader=args.reload, loop=loop)
