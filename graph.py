@@ -88,17 +88,17 @@ class RawRepoData:
     _cache = TTLCache(100, ttl=_ttl)
     _last_expiry = time.monotonic()
 
-    def __init__(self, url: str, channel: str, arch: str = "linux-64", ttl=600):
+    def __init__(self, channel: str, arch: str = "linux-64", base_url: str = "https://conda.anaconda.org/", ttl=600):
         # setup cache
         self.ttl = ttl
         # normal seetings
         logger.info(f"RETRIEVING: {channel}, {arch}")
-        if '{channel}' in url and '{arch}' in url:
-            url_prefix = url.format(channel=channel, arch=arch)
-        elif '{channel}' in url:
-            url_prefix = url.format(channel=channel) + f"/{arch}"
+        if '{channel}' in base_url and '{arch}' in base_url:
+            url_prefix = base_url.format(channel=channel, arch=arch)
+        elif '{channel}' in base_url:
+            url_prefix = base_url.format(channel=channel) + f"/{arch}"
         else:
-            url_prefix = f"{url}/{channel}/{arch}"
+            url_prefix = f"{base_url}/{channel}/{arch}"
         repodata_url = f"{url_prefix}/repodata.json.bz2"
         data = requests.get(repodata_url)
         repodata = json.loads(bz2.decompress(data.content))
