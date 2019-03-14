@@ -96,9 +96,9 @@ class RawRepoData:
         if '{channel}' in base_url and '{arch}' in base_url:
             url_prefix = base_url.format(channel=channel, arch=arch)
         elif '{channel}' in base_url:
-            url_prefix = base_url.format(channel=channel) + f"/{arch}"
+            url_prefix = base_url.format(channel=channel).rstrip('/') + f"/{arch}"
         else:
-            url_prefix = f"{base_url}/{channel}/{arch}"
+            url_prefix = f"{base_url.rstrip('/')}/{channel}/{arch}"
         repodata_url = f"{url_prefix}/repodata.json.bz2"
         data = requests.get(repodata_url)
         repodata = json.loads(bz2.decompress(data.content))

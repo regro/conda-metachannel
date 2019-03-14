@@ -132,7 +132,7 @@ if __name__ == "__main__":
     parser.add_argument("--base-url", default="https://conda.anaconda.org/")
     args = parser.parse_args()
 
-    base_url = args.base_url.rstrip('/')
+    base_url = args.base_url
 
     try:
         if in_container() and args.host == "127.0.0.1":
