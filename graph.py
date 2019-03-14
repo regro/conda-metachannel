@@ -20,12 +20,11 @@ from pandas.io import json
 from sortedcontainers import SortedList
 from cachetools import LRUCache, cachedmethod, cached, TTLCache
 
-
 logger = getLogger(__name__)
 
 
 def build_repodata_graph(
-    repodata: dict, arch: str, url_prefix: str
+        repodata: dict, arch: str, url_prefix: str
 ) -> networkx.DiGraph:
     G = networkx.DiGraph()
     for p, v in repodata["packages"].items():
@@ -89,12 +88,17 @@ class RawRepoData:
     _cache = TTLCache(100, ttl=_ttl)
     _last_expiry = time.monotonic()
 
-    def __init__(self, channel: str, arch: str = "linux-64", ttl=600):
+    def __init__(self, channel: str, arch: str = "linux-64", base_url: str = "https://conda.anaconda.org/", ttl=600):
         # setup cache
         self.ttl = ttl
         # normal seetings
         logger.info(f"RETRIEVING: {channel}, {arch}")
-        url_prefix = f"https://conda.anaconda.org/{channel}/{arch}"
+        if '{channel}' in base_url and '{arch}' in base_url:
+            url_prefix = base_url.format(channel=channel, arch=arch)
+        elif '{channel}' in base_url:
+            url_prefix = base_url.format(channel=channel).rstrip('/') + f"/{arch}"
+        else:
+            url_prefix = f"{base_url.rstrip('/')}/{channel}/{arch}"
         repodata_url = f"{url_prefix}/repodata.json.bz2"
         data = requests.get(repodata_url)
         repodata = json.loads(bz2.decompress(data.content))
@@ -140,14 +144,14 @@ class FusedRepoData:
         return f"FusedRepoData([{''.join(self.component_channels)}], {self.arch})"
 
 
-def get_repo_data(channel: typing.List[str], arch: str) -> FusedRepoData:
+def get_repo_data(channel: typing.List[str], arch: str, base_url: str = "https://conda.anaconda.org/") -> FusedRepoData:
     repodatas = []
     RawRepoData._expire()
     for c in channel:
         key = (c, arch)
         # TODO: This should happen in parallel
         if key not in RawRepoData._cache:
-            RawRepoData._cache[key] = RawRepoData(c, arch)
+            RawRepoData._cache[key] = RawRepoData(c, arch, base_url)
         repodatas.append(RawRepoData._cache[key])
     return FusedRepoData(repodatas, arch)
 
@@ -179,18 +183,18 @@ def get_blacklist(blacklist_name, channel, arch):
 
 
 class ArtifactGraph:
-
     _ttl = 600
     _artifact_graph_cache = TTLCache(100, ttl=_ttl)
     _last_expiry = time.monotonic()
 
-    def __init__(self, channel, arch, constraints):
+    def __init__(self, channel, arch, constraints, base_url="https://conda.anaconda.org/"):
+        self.base_url = base_url
         self.channel = channel
         self.arch = arch
         self.constraints = constraints
 
         # TODO: These should run in parallel
-        self.raw = get_repo_data(channel, arch)
+        self.raw = get_repo_data(channel, arch, base_url)
 
         # TODO: Since solving the artifact graph happens twice for a given conda operation, once for arch and once for
         #       noarch we need to treat the noarch channel here as an arch channel.
@@ -198,9 +202,9 @@ class ArtifactGraph:
         #       In the future it may be wiser to just store the whole are collectively.
 
         if arch != "noarch":
-            self.noarch = get_repo_data(channel, "noarch")
+            self.noarch = get_repo_data(channel, "noarch", base_url)
         else:
-            self.noarch = get_repo_data(channel, "linux-64")
+            self.noarch = get_repo_data(channel, "linux-64", base_url)
 
         self.package_constraints, self.functional_constraints = parse_constraints(
             constraints
@@ -357,7 +361,7 @@ class ArtifactGraph:
 
 
 def get_artifact_graph(
-    channel: typing.List[str], arch: str, constraints
+        channel: typing.List[str], arch: str, constraints, base_url: str = "https://conda.anaconda.org/"
 ) -> ArtifactGraph:
     if isinstance(constraints, str):
         constraints = [constraints]
@@ -365,5 +369,5 @@ def get_artifact_graph(
     key = (tuple(channel), arch, tuple(sorted(constraints)))
     agcache = ArtifactGraph.artifact_graph_cache()
     if key not in agcache:
-        agcache[key] = ArtifactGraph(channel, arch, constraints)
+        agcache[key] = ArtifactGraph(channel, arch, constraints, base_url)
     return agcache[key]
