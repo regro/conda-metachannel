@@ -105,3 +105,6 @@ venv.bak/
 
 # Rever
 rever/
+
+# vscode
+.vscode
