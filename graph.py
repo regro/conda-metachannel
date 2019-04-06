@@ -23,8 +23,11 @@ from cachetools import LRUCache, cachedmethod, cached, TTLCache
 logger = getLogger(__name__)
 
 
+DEFAULT_BASE_URL = "https://conda.anaconda.org/"
+
+
 def build_repodata_graph(
-        repodata: dict, arch: str, url_prefix: str
+    repodata: dict, arch: str, url_prefix: str
 ) -> networkx.DiGraph:
     G = networkx.DiGraph()
     for p, v in repodata["packages"].items():
@@ -70,6 +73,10 @@ def recursive_parents(G: networkx.DiGraph, nodes):
         n = todo.popleft()
         if n in done:
             continue
+        # conda automatically adds pip as a dep of python even when it isn't
+        # this preserves this quirk
+        if n == 'python' and 'pip' not in done:
+            todo.append('pip')
         # If we requested a package that does not exist in our graph, skip it
         if n not in G.nodes:
             # TODO: switch logging to loguru so that we can have context
@@ -88,15 +95,24 @@ class RawRepoData:
     _cache = TTLCache(100, ttl=_ttl)
     _last_expiry = time.monotonic()
 
-    def __init__(self, channel: str, arch: str = "linux-64", base_url: str = "https://conda.anaconda.org/", ttl=600):
+    def __init__(
+        self,
+        channel: str,
+        arch: str = "linux-64",
+        base_url: str = DEFAULT_BASE_URL,
+        ttl=600,
+    ):
         # setup cache
         self.ttl = ttl
         # normal seetings
         logger.info(f"RETRIEVING: {channel}, {arch}")
-        if '{channel}' in base_url and '{arch}' in base_url:
+        # for channels that have explicitly specified the channel
+        if channel.startswith("http://") or channel.startswith("https://"):
+            url_prefix = channel.rstrip("/") + f"/{arch}"
+        elif "{channel}" in base_url and "{arch}" in base_url:
             url_prefix = base_url.format(channel=channel, arch=arch)
-        elif '{channel}' in base_url:
-            url_prefix = base_url.format(channel=channel).rstrip('/') + f"/{arch}"
+        elif "{channel}" in base_url:
+            url_prefix = base_url.format(channel=channel).rstrip("/") + f"/{arch}"
         else:
             url_prefix = f"{base_url.rstrip('/')}/{channel}/{arch}"
         repodata_url = f"{url_prefix}/repodata.json.bz2"
@@ -136,7 +152,7 @@ class FusedRepoData:
             raw = raw_repodata[i]
             self.component_channels.append(raw.channel)
             H = raw.graph
-            G = compose_with_attrs(G, H)
+            G = networkx.compose(G, H)
 
         self.graph = G
 
@@ -144,13 +160,16 @@ class FusedRepoData:
         return f"FusedRepoData([{''.join(self.component_channels)}], {self.arch})"
 
 
-def get_repo_data(channel: typing.List[str], arch: str, base_url: str = "https://conda.anaconda.org/") -> FusedRepoData:
+def get_repo_data(
+    channel: typing.List[str], arch: str, base_url: str = DEFAULT_BASE_URL
+) -> FusedRepoData:
     repodatas = []
     RawRepoData._expire()
     for c in channel:
         key = (c, arch)
         # TODO: This should happen in parallel
         if key not in RawRepoData._cache:
+            logger.info("refreshing cache for {c}/{arch}")
             RawRepoData._cache[key] = RawRepoData(c, arch, base_url)
         repodatas.append(RawRepoData._cache[key])
     return FusedRepoData(repodatas, arch)
@@ -187,7 +206,7 @@ class ArtifactGraph:
     _artifact_graph_cache = TTLCache(100, ttl=_ttl)
     _last_expiry = time.monotonic()
 
-    def __init__(self, channel, arch, constraints, base_url="https://conda.anaconda.org/"):
+    def __init__(self, channel, arch, constraints, base_url=DEFAULT_BASE_URL):
         self.base_url = base_url
         self.channel = channel
         self.arch = arch
@@ -361,10 +380,28 @@ class ArtifactGraph:
 
 
 def get_artifact_graph(
-        channel: typing.List[str], arch: str, constraints, base_url: str = "https://conda.anaconda.org/"
+    channel: typing.List[str], arch: str, constraints, base_url: str = DEFAULT_BASE_URL
 ) -> ArtifactGraph:
     if isinstance(constraints, str):
         constraints = [constraints]
+
+    # Special handling for defaults because it is special
+    if "defaults" in channel:
+        if arch == "win-64":
+            new_channel = [
+                "https://repo.anaconda.com/pkgs/main",
+                "https://repo.anaconda.com/pkgs/msys"
+                "https://repo.anaconda.com/pkgs/r",
+            ]
+        else:
+            new_channel = [
+                "https://repo.anaconda.com/pkgs/main",
+                "https://repo.anaconda.com/pkgs/r",
+            ]
+        idx = channel.index("defaults")
+        channel = channel[:idx] + new_channel + channel[idx + 1 :]
+
+    print(f"Using channel {channel}")
 
     key = (tuple(channel), arch, tuple(sorted(constraints)))
     agcache = ArtifactGraph.artifact_graph_cache()

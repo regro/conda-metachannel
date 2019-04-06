@@ -22,6 +22,10 @@ CACHED_CHANNELS = [
     ("conda-forge", "osx-64"),
     ("conda-forge", "linux-64"),
     ("conda-forge", "win-64"),
+    ("defaults", 'noarch'),
+    ("defaults", 'osx-64'),
+    ("defaults", 'linux-64'),
+    ("defaults", 'win-64'),
 ]
 
 
