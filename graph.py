@@ -390,7 +390,7 @@ def get_artifact_graph(
         if arch == "win-64":
             new_channel = [
                 "https://repo.anaconda.com/pkgs/main",
-                "https://repo.anaconda.com/pkgs/msys"
+                "https://repo.anaconda.com/pkgs/msys",
                 "https://repo.anaconda.com/pkgs/r",
             ]
         else:
