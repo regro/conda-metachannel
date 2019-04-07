@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 arch = ["linux-64", "noarch", "osx-64"]
 
-VERSION = "0.0.17"
+VERSION = "0.1.0"
 CHANNEL_MAP = {"conda-forge": "https://conda-static.anaconda.org/conda-forge"}
 INDEX_STATIC = {}
 
