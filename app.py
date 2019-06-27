@@ -4,9 +4,9 @@ import os
 import subprocess
 import logging
 
-from quart import Quart as Flask, redirect
+from quart import Quart as Flask, redirect, abort
 from pandas.io import json
-from graph import get_artifact_graph, ArtifactGraph, get_repo_data
+from graph import get_artifact_graph, ArtifactGraph, get_repo_data, REPODATA_FILE, REPODATA_FILE_CURRENT
 
 
 logger = logging.getLogger(__name__)
@@ -29,26 +29,35 @@ CACHED_CHANNELS = [
 ]
 
 
-def fetch_artifact_graph(channel, constraints, arch) -> ArtifactGraph:
+def fetch_artifact_graph(channel, constraints, arch, repodata_file) -> ArtifactGraph:
     constraints = constraints.split(",")
     channel = channel.split(",")
-    ag = get_artifact_graph(channel, arch, constraints, base_url)
+    ag = get_artifact_graph(channel=channel, arch=arch, constraints=constraints, base_url=base_url, repodata_file=repodata_file)
     return ag
 
 
+def current_repodata_json(channel, constraints, arch):
+    ag = fetch_artifact_graph(channel, constraints, arch, REPODATA_FILE_CURRENT)
+    res = ag.repodata_json()
+    if res == 'null':
+        return None
+    return res
+
+
 def repodata_json(channel, constraints, arch):
-    ag = fetch_artifact_graph(channel, constraints, arch)
+    ag = fetch_artifact_graph(channel, constraints, arch, REPODATA_FILE)
     return ag.repodata_json()
 
 
 def repodata_json_bz2(channel, constraints, arch):
-    ag = fetch_artifact_graph(channel, constraints, arch)
+    ag = fetch_artifact_graph(channel, constraints, arch, REPODATA_FILE)
     return ag.repodata_json_bzip()
 
 
 async def warm_cache(loop, channel, arch, base_url):
     while True:
-        await loop.run_in_executor(None, get_repo_data, channel, arch, base_url)
+        await loop.run_in_executor(None, get_repo_data, channel, arch, REPODATA_FILE_CURRENT, base_url)
+        await loop.run_in_executor(None, get_repo_data, channel, arch, REPODATA_FILE, base_url)
         await asyncio.sleep(30)
 
 
@@ -56,7 +65,7 @@ async def warm_cache(loop, channel, arch, base_url):
 async def artifact(channel, constraints, arch, artifact):
     """
     Example:
-          /conda-forge/pandas,ipython,scikitlearn/linux-64/artifact.
+          /conda-forge/pandas,ipython,scikitlearn/linux-64/artifact-5.0.0_1000.tar.bz2
 
     """
     loop = asyncio.get_event_loop()
@@ -69,10 +78,31 @@ async def artifact(channel, constraints, arch, artifact):
         return await loop.run_in_executor(
             None, repodata_json_bz2, channel, constraints, arch
         )
-    else:
-        ag = await loop.run_in_executor(
-            None, fetch_artifact_graph, channel, constraints, arch
+    elif artifact == 'current_repodata.json':
+        # current repodata doesn't exist for everything, so we need to be a tad more careful
+        json = await loop.run_in_executor(
+            None, current_repodata_json, channel, constraints, arch
         )
+        if json is None:
+            abort(404)
+        else:
+            return json
+    elif artifact.endswith('.json'):
+        # if we ask for another magic json file that we don't know how to handle, just fake out
+        abort(404)
+    else:
+        # TODO: Do some light processing on channels.  If we are not fusing channels we can just
+        #       construct the redirect url directly without needing to do any work.
+
+        # TODO fetch these things in parallel.  current *should* be cheaper so do both, 
+        #      if success in any one of them cancel the other.  If both fail, die
+        ag = await loop.run_in_executor(
+            None, fetch_artifact_graph, channel, constraints, arch, REPODATA_FILE
+        )
+        # ag_current = await loop.run_in_executor(
+        #     None, fetch_artifact_graph, channel, constraints, arch, REPODATA_FILE_CURRENT
+        # )
+
         # Due to https://github.com/conda/conda/blob/master/conda/core/subdir_data.py#L358 we can't just use the stored
         # urls as part of the repodata, and have to retrieve the urls instead in order to detach fused channels
         true_url = ag.repodata_json_dict()["packages"][artifact]["url"]

@@ -24,6 +24,8 @@ logger = getLogger(__name__)
 
 
 DEFAULT_BASE_URL = "https://conda.anaconda.org/"
+REPODATA_FILE_CURRENT = "current_repodata.json"
+REPODATA_FILE = "repodata.json.bz2"
 
 
 def build_repodata_graph(
@@ -48,7 +50,7 @@ def build_repodata_graph(
 
 
 def compose_with_attrs(G: networkx.DiGraph, H: networkx.DiGraph) -> networkx.DiGraph:
-    """Composes the two graphs together in such a way as to retain / merge attributes"""
+    """Composes the two graphs together in such a way as to retain / merge attributes"""   
     I = networkx.compose(G, H)
     for name, attrs in G.nodes(data=True):
         for key, val in attrs.items():
@@ -75,8 +77,8 @@ def recursive_parents(G: networkx.DiGraph, nodes):
             continue
         # conda automatically adds pip as a dep of python even when it isn't
         # this preserves this quirk
-        if n == 'python' and 'pip' not in done:
-            todo.append('pip')
+        if n == "python" and "pip" not in done:
+            todo.append("pip")
         # If we requested a package that does not exist in our graph, skip it
         if n not in G.nodes:
             # TODO: switch logging to loguru so that we can have context
@@ -97,9 +99,11 @@ class RawRepoData:
 
     def __init__(
         self,
+        *,
         channel: str,
         arch: str = "linux-64",
         base_url: str = DEFAULT_BASE_URL,
+        repodata_file: str = REPODATA_FILE,
         ttl=600,
     ):
         # setup cache
@@ -115,16 +119,31 @@ class RawRepoData:
             url_prefix = base_url.format(channel=channel).rstrip("/") + f"/{arch}"
         else:
             url_prefix = f"{base_url.rstrip('/')}/{channel}/{arch}"
-        repodata_url = f"{url_prefix}/repodata.json.bz2"
-        data = requests.get(repodata_url)
-        repodata = json.loads(bz2.decompress(data.content))
+        repodata_url = f"{url_prefix}/{repodata_file}"
+
         self.channel = channel
         self.arch = arch
-        self.graph = build_repodata_graph(repodata, arch, url_prefix)
-        logger.info(f"GRAPH BUILD FOR {repodata_url}")
+        self.repodata_url = repodata_url
+
+        # Attempt to fetch current repodata
+        data = requests.get(repodata_url)
+        if data.ok:
+            if repodata_url.endswith(".bz2"):
+                decompressed_content = bz2.decompress(data.content)
+            else:
+                decompressed_content = data.content
+            repodata = json.loads(decompressed_content)
+            self.graph = build_repodata_graph(repodata, arch, url_prefix)
+            logger.info(f"GRAPH BUILD FOR {repodata_url}")
+        else:
+            self.graph = None
+            logger.warning(f"NO BUILD FOR {repodata_url}")
+
+    def __hash__(self):
+        return hash(self.repodata_url)
 
     def __repr__(self):
-        return f"RawRepoData({self.channel}/{self.arch})"
+        return f"RawRepoData({self.repodata_url})"
 
     @classmethod
     def _expire(cls):
@@ -161,16 +180,21 @@ class FusedRepoData:
 
 
 def get_repo_data(
-    channel: typing.List[str], arch: str, base_url: str = DEFAULT_BASE_URL
+    channel: typing.List[str],
+    arch: str,
+    repodata_file: str,
+    base_url: str = DEFAULT_BASE_URL,
 ) -> FusedRepoData:
     repodatas = []
     RawRepoData._expire()
     for c in channel:
-        key = (c, arch)
+        key = (c, arch, repodata_file)
         # TODO: This should happen in parallel
         if key not in RawRepoData._cache:
             logger.info("refreshing cache for {c}/{arch}")
-            RawRepoData._cache[key] = RawRepoData(c, arch, base_url)
+            RawRepoData._cache[key] = RawRepoData(
+                channel=c, arch=arch, base_url=base_url, repodata_file=repodata_file
+            )
         repodatas.append(RawRepoData._cache[key])
     return FusedRepoData(repodatas, arch)
 
@@ -206,32 +230,48 @@ class ArtifactGraph:
     _artifact_graph_cache = TTLCache(100, ttl=_ttl)
     _last_expiry = time.monotonic()
 
-    def __init__(self, channel, arch, constraints, base_url=DEFAULT_BASE_URL):
+    def __init__(
+        self, channel, arch, constraints, repodata_file, base_url=DEFAULT_BASE_URL
+    ):
         self.base_url = base_url
         self.channel = channel
         self.arch = arch
         self.constraints = constraints
 
-        # TODO: These should run in parallel
-        self.raw = get_repo_data(channel, arch, base_url)
+        self.raw = get_repo_data(
+            channel=channel, arch=arch, base_url=base_url, repodata_file=repodata_file
+        )
+        if self.raw.graph is not None:
 
-        # TODO: Since solving the artifact graph happens twice for a given conda operation, once for arch and once for
-        #       noarch we need to treat the noarch channel here as an arch channel.
-        #       The choice of noarch standin as linux-64 is mostly convenience.
-        #       In the future it may be wiser to just store the whole are collectively.
+            # TODO: Since solving the artifact graph happens twice for a given conda operation, once for arch and once for
+            #       noarch we need to treat the noarch channel here as an arch channel.
+            #       The choice of noarch standin as linux-64 is mostly convenience.
+            #       In the future it may be wiser to just store the whole are collectively.
 
-        if arch != "noarch":
-            self.noarch = get_repo_data(channel, "noarch", base_url)
+            if arch != "noarch":
+                self.noarch = get_repo_data(
+                    channel=channel,
+                    arch="noarch",
+                    base_url=base_url,
+                    repodata_file=repodata_file,
+                )
+            else:
+                self.noarch = get_repo_data(
+                    channel=channel,
+                    arch="linux-64",
+                    base_url=base_url,
+                    repodata_file=repodata_file,
+                )
+
+            self.package_constraints, self.functional_constraints = parse_constraints(
+                constraints
+            )
+
+            self.constrain_graph(
+                self.raw.graph, self.noarch.graph, self.package_constraints
+            )
         else:
-            self.noarch = get_repo_data(channel, "linux-64", base_url)
-
-        self.package_constraints, self.functional_constraints = parse_constraints(
-            constraints
-        )
-
-        self.constrain_graph(
-            self.raw.graph, self.noarch.graph, self.package_constraints
-        )
+            self.constrained_graph = None
 
         self._repodata_cache = TTLCache(100, ttl=self._ttl)
 
@@ -259,27 +299,30 @@ class ArtifactGraph:
             self.constrained_graph = combined_graph
 
     def repodata_json_dict(self):
-        all_packages = {}
-        for n in self.constrained_graph:
-            logger.debug(n)
-            packages = self.constrained_graph.nodes[n].get(f"packages_{self.arch}", {})
+        if self.constrained_graph:
+            all_packages = {}
+            for n in self.constrained_graph:
+                logger.debug(n)
+                packages = self.constrained_graph.nodes[n].get(f"packages_{self.arch}", {})
 
-            if "--max-build-no" in self.functional_constraints:
-                # packages with build strings should always be included
-                packages = self.constrain_by_build_number(packages)
+                if "--max-build-no" in self.functional_constraints:
+                    # packages with build strings should always be included
+                    packages = self.constrain_by_build_number(packages)
 
-            if "--untrack-features" in self.functional_constraints:
-                packages = self.untrack_features(packages)
+                if "--untrack-features" in self.functional_constraints:
+                    packages = self.untrack_features(packages)
 
-            if "--blacklist" in self.functional_constraints:
-                for blacklist_name in self.functional_constraints["--blacklist"]:
-                    packages = self.constrain_by_blacklist(packages, blacklist_name)
+                if "--blacklist" in self.functional_constraints:
+                    for blacklist_name in self.functional_constraints["--blacklist"]:
+                        packages = self.constrain_by_blacklist(packages, blacklist_name)
 
-            if n == "blas":
-                logger.debug(pformat(packages))
-            all_packages.update(packages)
+                if n == "blas":
+                    logger.debug(pformat(packages))
+                all_packages.update(packages)
 
-        return {"packages": all_packages}
+            return {"packages": all_packages}
+        else:
+            return None
 
     def constrain_by_build_number(self, packages):
         """For a given packages dictionary ensure that only the top build number for a given build_string is kept
@@ -380,7 +423,11 @@ class ArtifactGraph:
 
 
 def get_artifact_graph(
-    channel: typing.List[str], arch: str, constraints, base_url: str = DEFAULT_BASE_URL
+    channel: typing.List[str],
+    arch: str,
+    constraints,
+    repodata_file: str,
+    base_url: str = DEFAULT_BASE_URL,
 ) -> ArtifactGraph:
     if isinstance(constraints, str):
         constraints = [constraints]
@@ -403,8 +450,14 @@ def get_artifact_graph(
 
     print(f"Using channel {channel}")
 
-    key = (tuple(channel), arch, tuple(sorted(constraints)))
+    key = (tuple(channel), arch, tuple(sorted(constraints)), repodata_file)
     agcache = ArtifactGraph.artifact_graph_cache()
     if key not in agcache:
-        agcache[key] = ArtifactGraph(channel, arch, constraints, base_url)
+        agcache[key] = ArtifactGraph(
+            channel=channel,
+            arch=arch,
+            constraints=constraints,
+            repodata_file=repodata_file,
+            base_url=base_url,
+        )
     return agcache[key]

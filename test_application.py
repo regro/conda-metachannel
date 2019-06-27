@@ -83,3 +83,34 @@ def test_blacklist(app_fixture):
     output2 = json.loads(stdout)
 
     assert len(output2["python"]) < len(output["python"])
+
+
+def test_current_repodata(app_fixture):
+    channel = f"{app_fixture}/conda-forge/python"
+    import requests
+
+    full_repodata = requests.get(f"{channel}/linux-64/repodata.json").json()
+    current_repodata = requests.get(f"{channel}/linux-64/current_repodata.json").json()
+
+    assert len(current_repodata['packages']) < len(full_repodata['packages'])
+
+
+def test_download_artifact(app_fixture):
+    package = 'conda-forge-pinning'
+    channel = f"{app_fixture}/conda-forge/{package}"
+    import requests
+
+    current_repodata = requests.get(f"{channel}/noarch/current_repodata.json").json()
+    print(current_repodata)
+
+    for k, v in sorted(current_repodata['packages'].items()):
+        if v['name'] == package:
+            filename = k
+
+            resp = requests.get(f"{channel}/noarch/{filename}", allow_redirects=False)
+            assert resp.ok
+            assert resp.status_code // 100 == 3
+            assert resp.headers["Location"] == f"https://conda.anaconda.org/conda-forge/noarch/{filename}"
+            break
+    else:
+        raise LookupError("No file download attempted")
