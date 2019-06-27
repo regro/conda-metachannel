@@ -38,7 +38,10 @@ def fetch_artifact_graph(channel, constraints, arch, repodata_file) -> ArtifactG
 
 def current_repodata_json(channel, constraints, arch):
     ag = fetch_artifact_graph(channel, constraints, arch, REPODATA_FILE_CURRENT)
-    return ag.repodata_json()
+    res = ag.repodata_json()
+    if res == 'null':
+        return None
+    return res
 
 
 def repodata_json(channel, constraints, arch):
@@ -76,9 +79,14 @@ async def artifact(channel, constraints, arch, artifact):
             None, repodata_json_bz2, channel, constraints, arch
         )
     elif artifact == 'current_repodata.json':
-        return await loop.run_in_executor(
+        # current repodata doesn't exist for everything, so we need to be a tad more careful
+        json = await loop.run_in_executor(
             None, current_repodata_json, channel, constraints, arch
         )
+        if json is None:
+            abort(404)
+        else:
+            return json
     elif artifact.endswith('.json'):
         # if we ask for another magic json file that we don't know how to handle, just fake out
         abort(404)
