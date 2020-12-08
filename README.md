@@ -1,3 +1,13 @@
+# warning :: unmaintained
+
+ATM conda metachannel is unmaintained.  The service that conda-forge ran has been shut down due to hosting costs.
+
+It should still work if you are deploying it on your own infrastructure.
+
+# If you are looking for a conda is slow solution
+
+Try using [mamba](https://github.com/mamba-org/mamba)
+
 # conda-metachannel
 
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
